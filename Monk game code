@@ -1,0 +1,786 @@
+RoomFcatory.h
+(#ifndef ROOMFACTORY_H
+#define ROOMFACTORY_H
+
+#include "Room.h"
+
+class RoomFactory {
+public:
+    static Room* createRoom(const std::string& type) {
+        if (type == "Empty") //create a empty room
+            return new EmptyRoom();
+        if (type == "Monster") //create a monster room
+            return new MonsterRoom();
+        if (type == "Upgrade") //create an upgrade room
+            return new UpgradeRoom();
+        if (type == "Treasure") //create a treasure room
+            return new TreasureRoom();
+        return nullptr;  // Unknown room type
+    }
+};
+
+#endif
+)
+
+Monster.cpp
+(// monster.cpp
+#include "Monster.h"
+#include "Monk.h"
+using namespace std;
+
+// Applies damage to monster and displays remaining health
+void Monster::takeDamage(int dmg) {
+    health -= dmg;
+    cout << name << " took " << dmg << " damage! Remaining health: " << health << "\n";
+}
+
+// Goblin's attack behavior (50% hit chance)
+void Goblin::attack(Monk& player) {
+    if (rand() % 2 == 0) {
+        cout << "Goblin slashes you for " << attackPower << " damage!\n";
+        player.takeDamage(attackPower);
+    }
+    else {
+        cout << "Goblin missed!\n";
+    }
+}
+
+// Gorilla's attack behavior (50% hit chance with different flavor text)
+void Gorilla::attack(Monk& player) {
+    if (rand() % 2 == 0) {
+        cout << "Gorilla smashes you for " << attackPower << " damage!\n";
+        player.takeDamage(attackPower);
+    }
+    else {
+        cout << "Gorilla swings wildly but misses!\n";
+    }
+}
+)
+
+Monster.h(#ifndef MONSTER_H
+#define MONSTER_H
+
+#include <iostream>
+
+using namespace std;
+
+class Monk;  // Forward declaration
+
+class Monster {
+protected:
+    string name;
+    int health;
+    int attackPower;
+
+public:
+    Monster(string n, int h, int a) : name(n), health(h), attackPower(a) {}
+
+    virtual void attack(Monk& player) = 0;  // Each monster has a different attack strategy
+    virtual void takeDamage(int dmg); //the monster gives damage to the monk
+    bool isDefeated() { 
+        return health <= 0;
+    }
+    string getName() { 
+        return name;
+    }
+    int getHealth() {
+        return health;
+    }
+};
+
+class Goblin : public Monster {
+public:
+    Goblin() : Monster("Goblin", 10, 2) {}
+    void attack(Monk& player) override;
+};
+
+class Gorilla : public Monster {
+public:
+    Gorilla() : Monster("Gorilla", 20, 4) {}
+    void attack(Monk& player) override;
+};
+
+#endif
+)
+Combat.cpp(// combat.cpp
+#include "Combat.h"
+#include <iostream>
+#include <cstdlib>
+using namespace std;
+
+// Handles turn-based combat between player and monster
+bool Combat::fight(Monk& player, Monster& enemy) {
+    cout << enemy.getName() << " appears! Prepare to fight.\n";
+
+    // Combat loop continues until someone is defeated
+    while (player.getHealth() > 0 && !enemy.isDefeated()) {
+        // Display combat status
+        cout << "Your Health: " << player.getHealth() << " | "
+            << enemy.getName() << "'s Health: " << enemy.getHealth() << "\n";
+
+        // Action selection
+        cout << "Choose an action:\n1. Attack\n2. Guard\n";
+        int action;
+        cin >> action;
+
+        // Player attack action
+        if (action == 1) {
+            // 50% chance to hit
+            if (rand() % 2 == 0) {
+                cout << "You hit the " << enemy.getName() << " for "
+                    << player.getAttack() << " damage!\n";
+                enemy.takeDamage(player.getAttack());
+
+                // Apply poison if active
+                if (player.hasShieldPoison()) {
+                    cout << enemy.getName() << " is poisoned! It takes **7** extra damage.\n";
+                    enemy.takeDamage(7);
+                    player.useShieldPoison();
+                }
+            }
+            else {
+                cout << "You missed the attack!\n";
+            }
+        }
+        // Player guard action
+        else {
+            player.recoverHealth(1); // Small heal when guarding
+        }
+
+        // Enemy counterattack if still alive
+        if (!enemy.isDefeated()) {
+            enemy.attack(player);
+        }
+    }
+
+    // Determine and return combat outcome
+    if (player.getHealth() > 0) {
+        cout << "You killed the " << enemy.getName() << "!\n";
+        return true; // Player victory
+    }
+    else {
+        cout << "You were defeated!\n";
+        return false; // Player defeat
+    }
+})
+Combat.h(//fightng logic combat
+
+#ifndef COMBAT_H
+#define COMBAT_H
+#include "Monk.h"
+#include "Monster.h"
+
+class Combat {    
+public:
+    static bool fight(Monk& player, Monster& enemy);
+};
+
+#endif
+)
+Monk.cpp(// monk.cpp
+#include "Monk.h"
+#include <iostream>
+#include <vector>
+#include "Room.h"
+using namespace std;
+
+// Constructor: Initializes monk with name, description and default stats
+Monk::Monk(std::string name, std::string desc)
+    : name(name), description(desc), health(15), attack(3),
+    currentRoom(nullptr), shieldPoison(false) {}
+
+// Sets the monk's current room and prints entry message
+void Monk::setRoom(Room* room) {
+    currentRoom = room;
+    cout << "You have entered a " << room->getType() << ".\n";
+}
+
+// Returns pointer to current room
+Room* Monk::getCurrentRoom() {
+    return currentRoom;
+}
+
+// Applies damage to monk and checks for defeat
+void Monk::takeDamage(int dmg) {
+    health -= dmg;
+    if (health <= 0) {
+        cout << "You have been defeated! Game over.\n";
+        exit(0); // Immediate game exit on death
+    }
+}
+
+// Restores specified amount of health
+void Monk::recoverHealth(int amount) {
+    health += amount;
+    cout << "You recovered " << amount << " health. Current Health: " << health << "\n";
+}
+
+// Special meditation healing (used in empty rooms)
+void Monk::meditate() {
+    health += 3;
+    cout << "You meditate and recover 3 health points. Current Health: " << health << "\n";
+}
+
+// Permanent health upgrade (used in upgrade rooms)
+void Monk::upgradeHealth() {
+    health += 5;
+    cout << "Your health increased! Current Health: " << health << "\n";
+}
+
+// Permanent attack upgrade (base version)
+void Monk::upgradeAttack() {
+    attack += 2;
+    cout << "Your attack power increased! Current Attack: " << attack << "\n";
+}
+
+// Temporary attack boost with specified amount
+void Monk::upgradeAttack(int amount) {
+    attack += amount;
+    cout << "Your attack power increased by " << amount << "! Current Attack: " << attack << "\n";
+}
+
+// Health accessor
+int Monk::getHealth() {
+    return health;
+}
+
+// Attack power accessor
+int Monk::getAttack() {
+    return attack;
+}
+
+// Shield poison status check
+bool Monk::hasShieldPoison() {
+    return shieldPoison;
+}
+
+// Activates shield poison effect
+void Monk::drinkShieldPoison() {
+    shieldPoison = true;
+    cout << "You drank the Shield Poison! Your next attack will poison the enemy.\n";
+}
+
+// Applies and consumes shield poison effect
+void Monk::useShieldPoison() {
+    if (shieldPoison) {
+        cout << "Your attack poisons the enemy!\n";
+        shieldPoison = false;  // Single-use effect
+    }
+})
+Monk.h(// monk.h
+#ifndef MONK_H
+#define MONK_H
+
+#include <string>
+
+using namespace std;
+
+// Forward declaration to avoid circular dependency
+class Room;
+
+/**
+ * @class Monk
+ * @brief Represents the player character in the dungeon game
+ *
+ * Handles all player stats, room navigation, and combat abilities
+ */
+class Monk {
+private:
+    string name;            // Player's chosen name
+    string description;     // Character description
+    int health;            // Current health points
+    int attack;            // Base attack damage
+    Room* currentRoom;     // Pointer to current location
+    bool shieldPoison;     // Flag for poison ability
+
+public:
+    /**
+     * @brief Constructs a new Monk object
+     * @param name The monk's name
+     * @param desc Character description/flavor text
+     */
+    Monk(string name, string desc);
+
+    // Room navigation methods
+    void setRoom(Room* room);
+    Room* getCurrentRoom();
+
+    // Health management methods
+    void takeDamage(int dmg);
+    void recoverHealth(int amount);
+    void meditate();
+    void upgradeHealth();
+
+    // Attack management methods
+    void upgradeAttack();          // Default +2 upgrade
+    void upgradeAttack(int amount); // Custom amount upgrade
+
+    // Attribute accessors
+    int getHealth();
+    int getAttack();
+
+    // Special ability methods (shield poison)
+    bool hasShieldPoison();
+    void drinkShieldPoison();
+    void useShieldPoison();
+};
+
+#endif)
+Dungeon.cpp(// dungeon.cpp
+#include "Dungeon.h"
+#include "RoomFactory.h"
+#include <iostream>
+#include <cstdlib>
+#include <ctime>
+#include <algorithm>  // For std::shuffle
+#include <random>     // For std::random_device and std::mt19937
+
+using namespace std;
+
+// Constructor: Initializes dungeon with monk pointer and generates rooms
+Dungeon::Dungeon(Monk* monk) : monk(monk), lockedTreasureRoom(nullptr) {
+    srand(time(0));  // Seed random number generator
+    generateRooms(); // Create dungeon layout
+}
+
+// Destructor: Cleans up dynamically allocated room memory
+Dungeon::~Dungeon() {
+    for (Room* room : rooms) {
+        delete room;  // Free each room's memory
+    }
+    rooms.clear();    // Clear the rooms vector
+}
+
+// Generates and connects rooms in the dungeon
+void Dungeon::generateRooms() {
+    std::random_device rd;  // True random number generator
+    std::mt19937 g(rd());   // Mersenne Twister engine
+
+    // Create basic rooms using factory pattern
+    rooms.push_back(RoomFactory::createRoom("Empty"));
+    rooms.push_back(RoomFactory::createRoom("Empty"));
+    rooms.push_back(RoomFactory::createRoom("Monster"));
+    rooms.push_back(RoomFactory::createRoom("Monster"));
+    rooms.push_back(RoomFactory::createRoom("Upgrade"));
+    rooms.push_back(RoomFactory::createRoom("Upgrade"));
+
+    // Create treasure room but keep it locked initially
+    lockedTreasureRoom = RoomFactory::createRoom("Treasure");
+
+    // Randomize room order using Fisher-Yates shuffle
+    std::shuffle(rooms.begin(), rooms.end(), g);
+
+    // Connect rooms in shuffled order with some random connections
+    for (int i = 0; i < rooms.size(); i++) {
+        // Connect to next room in sequence (if not last room)
+        if (i < rooms.size() - 1) {
+            rooms[i]->addConnection(rooms[i + 1]);
+        }
+        // Add one random connection to create non-linear paths
+        int randIndex = rand() % rooms.size();
+        if (randIndex != i) {
+            rooms[i]->addConnection(rooms[randIndex]);
+        }
+    }
+
+    // Connect treasure room to one random room (locked until conditions met)
+    int random = rand() % rooms.size();
+    rooms[random]->addConnection(lockedTreasureRoom);
+
+    // Place monk in first room and print generation message
+    monk->setRoom(rooms[0]);
+    cout << "Dungeon generated with " << rooms.size()
+        << " rooms. The Treasure Room is locked!\n";
+}
+
+// Main game loop for dungeon exploration
+void Dungeon::startExploration() {
+    cout << "Starting dungeon exploration!\n";
+
+    // Game loop continues until win/lose condition
+    while (true) {
+        Room* currentRoom = monk->getCurrentRoom();
+        cout << "You are in a " << currentRoom->getType() << ".\n";
+
+        // Track first visit to each room type
+        if (find(visitedRooms.begin(), visitedRooms.end(), currentRoom) == visitedRooms.end()) {
+            visitedRooms.push_back(currentRoom);
+        }
+
+        // Check for first visits to specific room types
+        if (currentRoom->getType() == "Empty Room" && !visitedEmpty) {
+            visitedEmpty = true;
+            cout << "✅ You have visited your first Empty Room!\n";
+        }
+        if (currentRoom->getType() == "Monster Room" && !visitedMonster) {
+            visitedMonster = true;
+            cout << "✅ You have visited your first Monster Room!\n";
+        }
+        if (currentRoom->getType() == "Upgrade Room" && !visitedUpgrade) {
+            visitedUpgrade = true;
+            cout << "✅ You have visited your first Upgrade Room!\n";
+        }
+
+        // Unlock treasure room after visiting all required room types
+        if (lockedTreasureRoom && visitedEmpty && visitedMonster && visitedUpgrade) {
+            cout << "🔓 You have explored at least one of each room type! "
+                << "The Treasure Room is now unlocked!\n";
+            for (Room* room : rooms) {
+                room->addConnection(lockedTreasureRoom);
+            }
+            lockedTreasureRoom = nullptr; // Mark as unlocked
+        }
+
+        // Win condition: Reached treasure room
+        if (currentRoom->getType() == "Treasure Room") {
+            cout << "🎉 Congratulations! You found the Treasure Room and won the game! 🎉\n";
+            break;
+        }
+
+        // Lose condition: Monk health depleted
+        if (monk->getHealth() <= 0) {
+            cout << "💀 You have been defeated... Game Over! 💀\n";
+            break;
+        }
+
+        // Room-specific interaction
+        currentRoom->enterRoom(monk);
+
+        // Get available connections (excluding treasure if locked)
+        vector<Room*> connections = currentRoom->getConnections();
+        if (lockedTreasureRoom) {
+            connections.erase(remove_if(connections.begin(), connections.end(),
+                [](Room* room) {
+                    return room->getType() == "Treasure Room";
+                }), connections.end());
+        }
+
+        // Display movement options
+        cout << "Available paths:\n";
+        for (int i = 0; i < connections.size(); i++) {
+            cout << i + 1 << ". " << connections[i]->getType() << "\n";
+        }
+
+        // Get and validate player choice
+        int choice;
+        cout << "Choose a room to explore: ";
+        cin >> choice;
+
+        if (0 < choice && choice <= connections.size()) {
+            monk->setRoom(connections[choice - 1]); // Move to selected room
+        }
+        else {
+            cout << "❌ Invalid choice, try again.\n";
+            continue;
+        }
+    }
+
+    cout << "🏆 Game Over. Thanks for playing! 🏆\n";
+}
+
+// Accessor for treasure room (may be nullptr if unlocked)
+Room* Dungeon::getTreasureRoom() {
+    return lockedTreasureRoom;
+}
+
+// Returns copy of all dungeon rooms
+vector<Room*> Dungeon::getRooms() {
+    return rooms;
+})
+Dungeon.h(// dungeon.h
+#ifndef DUNGEON_H
+#define DUNGEON_H
+
+#include "Room.h"
+#include "Monk.h"
+#include <vector>
+
+using namespace std;
+
+/**
+ * @class Dungeon
+ * @brief Manages the dungeon layout and game progression
+ *
+ * Handles room generation, connections, and game state tracking
+ */
+class Dungeon {
+private:
+    Monk* monk;                     // Pointer to player character
+    std::vector<Room*> rooms;       // All regular rooms
+    std::vector<Room*> visitedRooms;// Track explored rooms
+    Room* lockedTreasureRoom;       // Special win-condition room
+
+    // Track first visits to room types
+    bool visitedUpgrade = false;
+    bool visitedMonster = false;
+    bool visitedEmpty = false;
+
+public:
+    /**
+     * @brief Constructs a new Dungeon
+     * @param monk Pointer to the player character
+     */
+    Dungeon(Monk* monk);
+
+    /**
+     * @brief Destructor cleans up allocated rooms
+     */
+    ~Dungeon();
+
+    /**
+     * @brief Generates the dungeon layout
+     */
+    void generateRooms();
+
+    /**
+     * @brief Starts the main game loop
+     */
+    void startExploration();
+
+    /**
+     * @brief Gets the treasure room (may be nullptr)
+     * @return Room* Pointer to treasure room
+     */
+    Room* getTreasureRoom();
+
+    /**
+     * @brief Gets all rooms in dungeon
+     * @return vector<Room*> List of all rooms
+     */
+    std::vector<Room*> getRooms();
+};
+
+#endif)
+Room.cpp(// room.cpp
+#include "Room.h"
+#include "Combat.h"
+#include <cstdlib>
+using namespace std;
+
+// EmptyRoom implementation: Provides healing opportunity
+void EmptyRoom::enterRoom(Monk* monk) {
+    cout << "This room is empty. You can meditate to restore health.\n";
+    monk->meditate(); // Monk recovers health
+}
+
+// UpgradeRoom implementation: Offers stat improvements
+void UpgradeRoom::enterRoom(Monk* monk) {
+    cout << "You found an upgrade! Choose to increase Health or Attack.\n";
+    cout << "1. Increase Health (+5) \n2. Increase Attack (+2)\n";
+
+    int choice;
+    cin >> choice;
+
+    if (choice == 1) {
+        monk->upgradeHealth(); // Permanent health boost
+    }
+    else {
+        monk->upgradeAttack(); // Permanent attack boost
+    }
+}
+
+// TreasureRoom implementation: Win condition
+void TreasureRoom::enterRoom(Monk* monk) {
+    cout << "Congratulations! You found the treasure and won the game.\n";
+    exit(0); // Immediate game exit on win
+}
+
+// MonsterRoom implementation: Combat encounter
+void MonsterRoom::enterRoom(Monk* monk) {
+    cout << "You have entered a Monster Room.\n";
+    cout << "You see two enemies: A **Goblin** and a **Gorilla**.\n";
+
+    int choice;
+    Monster* enemy = nullptr;
+    bool prepared = false;  // Tracks preparation state
+
+    // Combat choice loop
+    while (true) {
+        cout << "Choose an option:\n";
+        cout << "1. Fight the Goblin\n";
+        cout << "2. Fight the Gorilla\n";
+
+        // Only show preparation option once
+        if (!prepared) {
+            cout << "3. Run to prepare\n";
+        }
+
+        cin >> choice;
+
+        // Handle combat selection
+        if (choice == 1) {
+            enemy = new Goblin(); // Create Goblin enemy
+            break;
+        }
+        else if (choice == 2) {
+            enemy = new Gorilla(); // Create Gorilla enemy
+            break;
+        }
+        else if (choice == 3 && !prepared) {
+            // Preparation mechanics
+            cout << "You decided to run and prepare before fighting.\n";
+            cout << "Choose your preparation option:\n";
+            cout << "1. Increase Attack (+10)\n";
+            cout << "2. Drink Shield Poison (Monsters get poisoned when attacked)\n";
+
+            int prepChoice;
+            cin >> prepChoice;
+
+            if (prepChoice == 1) {
+                monk->upgradeAttack(10); // Large temporary attack boost
+                cout << "Your attack increased by 10! You feel stronger for the battle.\n";
+            }
+            else if (prepChoice == 2) {
+                monk->drinkShieldPoison(); // Apply poison effect
+                cout << "You drank the Shield Poison! Now, enemies will take poison damage when attacked.\n";
+            }
+
+            prepared = true; // Prevent repeated preparation
+        }
+        else {
+            cout << "❌ Invalid choice, try again.\n";
+        }
+    }
+
+    // Initiate combat if enemy selected
+    if (enemy) {
+        Combat::fight(*monk, *enemy); // Resolve combat
+        delete enemy; // Clean up enemy
+    }
+})
+Room.h(// room.h
+#ifndef ROOM_H
+#define ROOM_H
+
+#include <iostream>
+#include <vector>
+#include <string>
+#include "Monk.h"
+
+using namespace std;
+
+/**
+ * @class Room
+ * @brief Base class for all dungeon rooms
+ *
+ * Defines common room properties and connections
+ */
+class Room {
+protected:
+    string type;                // Room classification
+    vector<Room*> connectedRooms; // Accessible adjacent rooms
+
+public:
+    /**
+     * @brief Constructs a new Room
+     * @param type The room's classification
+     */
+    Room(string type) : type(type) {}
+
+    /**
+     * @brief Virtual destructor for proper cleanup
+     */
+    virtual ~Room() {}
+
+    /**
+     * @brief Gets room type
+     * @return string Room classification
+     */
+    string getType() {
+        return type;
+    }
+
+    /**
+     * @brief Adds a connection to another room
+     * @param room Pointer to connecting room
+     */
+    void addConnection(Room* room) {
+        connectedRooms.push_back(room);
+    }
+
+    /**
+     * @brief Gets all connected rooms
+     * @return vector<Room*>& List of connected rooms
+     */
+    vector<Room*>& getConnections() {
+        return connectedRooms;
+    }
+
+    /**
+     * @brief Pure virtual function for room interaction
+     * @param monk Pointer to player character
+     */
+    virtual void enterRoom(Monk* monk) = 0;
+};
+
+/**
+ * @class EmptyRoom
+ * @brief Provides healing opportunities
+ */
+class EmptyRoom : public Room {
+public:
+    EmptyRoom() : Room("Empty Room") {}
+    void enterRoom(Monk* monk) override;
+};
+
+/**
+ * @class MonsterRoom
+ * @brief Hosts combat encounters
+ */
+class MonsterRoom : public Room {
+public:
+    MonsterRoom() : Room("Monster Room") {}
+    void enterRoom(Monk* monk) override;
+};
+
+/**
+ * @class UpgradeRoom
+ * @brief Offers permanent stat upgrades
+ */
+class UpgradeRoom : public Room {
+public:
+    UpgradeRoom() : Room("Upgrade Room") {}
+    void enterRoom(Monk* monk) override;
+};
+
+/**
+ * @class TreasureRoom
+ * @brief Win-condition room
+ */
+class TreasureRoom : public Room {
+public:
+    TreasureRoom() : Room("Treasure Room") {}
+    void enterRoom(Monk* monk) override;
+};
+
+#endif)
+Main(#include <iostream>
+#include "Dungeon.h"
+#include <string>
+#include "Monk.h"
+#include "Room.h"
+#include <cstdlib>
+#include <ctime>
+
+using namespace std;
+
+
+//our starting menu
+int main() {
+    cout << "Welcome to the Dungeon Exploration Game!\n";
+
+    string name, description;
+    cout << "Enter your Monk's name: ";
+    getline(cin, name);
+    cout << "Describe your Monk: ";
+    getline(cin, description);
+
+    Monk* monk = new Monk(name, description);
+    Dungeon dungeon(monk);
+
+    dungeon.startExploration();
+
+    delete monk; // cleans the memory
+    return 0;
+}
+)
